@@ -1,29 +1,69 @@
-# Welcome to GitHub
+<a id='top'></a>
+# IntraCranial pipeline description
 
-Welcome to GitHub—where millions of developers work together on software. Ready to get started? Let’s learn how this all works by building and publishing your first GitHub Pages website!
+1. Modules
+1. Folder structure
+1. IO
 
-## Repositories
+## Modules
 
-Right now, we’re in your first GitHub **repository**. A repository is like a folder or storage space for your project. Your project's repository contains all its files such as code, documentation, images, and more. It also tracks every change that you—or your collaborators—make to each file, so you can always go back to previous versions of your project if you make any mistakes.
+1. **Preprocessing**: Make mne raw files, basic cleaning (notch filter, resaple, low/high pass filter), rejection, referencing
+1. **Inference**:
+1. **Regressions**:
 
-This repository contains three important files: The HTML code for your first website on GitHub, the CSS stylesheet that decorates your website with colors and fonts, and the **README** file. It also contains an image folder, with one image file.
+Other
+1. **Figures**:
+1. **Overview**: make figures with evoked responses for all channels / subjects / bands.
+1. **Common functions**:
 
-## Describe your project
 
-You are currently viewing your project's **README** file. **_README_** files are like cover pages or elevator pitches for your project. They are written in plain text or [Markdown language](https://guides.github.com/features/mastering-markdown/), and usually include a paragraph describing the project, directions on how to use it, who authored it, and more.
+#### Tip to navigate the code:
+Most functions come in pairs of low level and high level functions (names follow the pattern `func()`,`func_wrap()`)
 
-[Learn more about READMEs](https://help.github.com/en/articles/about-readmes)
+**Low level functions** take genereal mne objects as arguments (raw, epochs). They are meant to be easily implemented in any MNE based code.  
+**High level functions** are basically wraps for low level functions, they perform four main operations: (i) Loop over subjects/bands/conditions... (ii) load data, (iii) call low level functions, (iv) save results and or modified data. Wraps need to "know" the folder structure (among other things) and therefore are functional as long as the basic structure of the pipeline is respected.
 
-## Your first website
 
-**GitHub Pages** is a free and easy way to create a website using the code that lives in your GitHub repositories. You can use GitHub Pages to build a portfolio of your work, create a personal website, or share a fun project that you coded with the world. GitHub Pages is automatically enabled in this repository, but when you create new repositories in the future, the steps to launch a GitHub Pages website will be slightly different.
+## Folder structure
 
-[Learn more about GitHub Pages](https://pages.github.com/)
+BIDS naming and folder structure
 
-## Rename this repository to publish your site
+- **Code**
+    - `ICPipeline.ipynb`
+    - `static_parameters.py`
+    - `run.py`
+    - utils
+        - modules
+- **Data** 
+    - raw
+        - sub-XX 
+            - `sub-XX_metadata.csv`
+            - `sub-XX_raw.fif`
+    - derivatives
+        - sub-XX
+            - `sub-XX_raw.fif`
+            - `sub-XX_band-XXXX_raw.fif`
+- **Figures**
+    - overview
+        - `sub-XX_overview.pdf`
+    
+## IO
 
-We've already set-up a GitHub Pages website for you, based on your personal username. This repository is called `hello-world`, but you'll rename it to: `username.github.io`, to match your website's URL address. If the first part of the repository doesn’t exactly match your username, it won’t work, so make sure to get it right.
+### In
 
+Raw data (from `Data/raw/sub-XX`)
+
+1. ieeg data in one single `raw.fif` file with mne raw objects with **montage included**, **line-noise removed** and **resampled** to desired sampling rate.
+1. metadata in a `csv` file
+
+If montage is not included coords are read as `nan` for compatibility with the rest of the pipeline.
+
+
+### Out
+
+Preprocessed data (at `Data/derivatives/sub-XX`)
+
+1. `mne.raw` stored as `sub-XX_band-XXX_raw.fif`
 Let's get started! To update this repository’s name, click the `Settings` tab on this page. This will take you to your repository’s settings page. 
 
 ![repo-settings-image](https://user-images.githubusercontent.com/18093541/63130482-99e6ad80-bf88-11e9-99a1-d3cf1660b47e.png)
