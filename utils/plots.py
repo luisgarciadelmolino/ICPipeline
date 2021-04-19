@@ -183,7 +183,7 @@ def scatter_plot(a,x,y,coefs,mode='minmax',colorbar='',title='',mask=[],interval
     a.tick_params(axis='both', which='both', size = 0, labelsize=7)
 
 
-def channel_position_plot(ax,coords):
+def channel_position_plot(ax,coords,mask=[]):
     """Plot electrode position on brain with nilearn
 
     Plot all electrodes in white and selected electrode in blue.
@@ -196,8 +196,19 @@ def channel_position_plot(ax,coords):
     coords : list 
         coords of channel to plot
     """
+    
+    colors = np.array([[0.7,0.13,0.13,1.]]*len(coords))
+    sizes = 10*np.ones(len(colors))
+    if len(mask)>0 and np.sum(mask)>0:  
+        sizes[mask] = 0.5*np.ones(np.sum(mask))
+        colors[mask] = np.array([[0.,0.,0.,.5]]*np.sum(mask))
+
     # nilearn plot
-    plotting.plot_connectome(np.zeros((len(coords),len(coords))),coords, node_color=['firebrick'], display_mode='lyrz', axes=ax) 
+    try: plotting.plot_connectome(np.zeros((len(coords),len(coords))),coords, node_color=colors.tolist(), display_mode='lyrz', axes=ax,node_size=sizes) 
+    except: pass
+
+
+
 
 
 
@@ -302,7 +313,7 @@ def trace_plot(a, x, y, title = '', xlabel = '', ylabel = '', xlims = [], ylims 
             for i in range(y.shape[0]): a.plot(x,i + y[i], color=colors[i%10],lw=0.5)
 
 
-    a.set_title(title)
+    a.set_title(title)   #  + f"  SNR = {(m**2/y.std(axis=0)**2).mean(axis=-1)}"
     a.set_xlabel(xlabel)
     a.set_ylabel(ylabel)
 

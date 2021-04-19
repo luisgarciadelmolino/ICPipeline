@@ -31,72 +31,48 @@ def sub_params(sub):
     Returns
     -------
     Paths:
-    dp['raw_path'] : str
-        path to raw data folder
-    dp['derivatives_path'] : str
-        path to derivatives folder.
+    SP['RawPath'] : str, path to raw data folder
+    SP['DerivativesPath'] : str, path to derivatives folder.
         Derivatives folder contains epochs, TFRepochs and in general any preprocessed data (i.e. not raw or source)
 
     Files:
-    dp['raw_files'] : list of str
-        names of ieeg.csv / raw.fif files in raw folder
-    dp['event_files'] : list of str
-         names of metadata files (they must match the number of raw_files)
+    SP['RawFile'] : str, *raw.fif file in RawPath
+    SP['MetadataFile'] : str, metadata file (csv or tsv DataFrame)
+    SP['ChInfoFile'] : str, channel info file (json)
 
     Notes
     -----
     The function automatically creates derivatives paths if they do not exist. For example, the first time running the pipeline.
-
     """
 
-    # alocate dynamic parameters dict
-    dp = {}
+    # alocate subject parameters dict
+    SP = {}
 
-    dp['sub']=sub
+    SP['sub']=sub
 
     # paths-----------------------------------------------------------------------------------
-    dp['raw_path'] = check_path(['..','Data', 'raw',  sub])
-    dp['source_path'] = os.path.join('..','Data', 'source',  sub, 'ieeg')
-
-    dp['derivatives_path'] = check_path(['..','Data', 'derivatives' + cfg.derivatives_tag ,  sub])
-    dp['figures_path'] = check_path(['..','Figures'])
+    SP['RawPath'] = check_path(['..','Data', 'raw',  sub])
+    SP['SourcePath'] = os.path.join('..','Data', 'source',  sub, 'ieeg')
+    SP['DerivativesPath'] = check_path(['..','Data', 'derivatives' + cfg.DerivativesTag ,  sub])
+    SP['FiguresPath'] = check_path(['..','Figures'])
 
     # files --------------------------------------------------------------------------------
-    #dp['source_files'] = sorted(glob.glob(dp['source_path'] + '/*.ns3'))
-    #dp['raw_file'] = glob.glob(dp['raw_path'] + '/*ieeg.csv')[0]
-    dp['metadata_file'] = glob.glob(dp['raw_path'] +'/*metadata.*')[0]
+    #SP['source_files'] = sorted(glob.glob(SP['SourcePath'] + '/*.ns3'))
+    SP['RawFile'] = glob.glob(SP['RawPath'] + '/*raw.fif')[0]
+    SP['MetadataFile'] = glob.glob(SP['RawPath'] +'/*metadata.*')[0]
+    SP['ChInfoFile'] = os.path.join(SP['DerivativesPath'],f"{sub}_info.json")
 
     # SOA ------------------------------------------------------------------------------------
-    df = pd.read_csv(os.path.join(dp['raw_path'],sub+'_metadata.csv'))
+    df = pd.read_csv(os.path.join(SP['RawPath'],sub+'_metadata.csv'))
     ttl = df[df['eventtype']=='wordonset']['time']
-    dp['soa'] = np.median(np.diff(ttl))
+    SP['soa'] = np.median(np.diff(ttl))
 
-    # electrodes info ----------------------------------------------------------------------------
-    electrodes_file = glob.glob(os.path.join(dp['raw_path'],  sub + '_electrodes.*'))
+    # channel info ---------------------------------------------------------------------------
 
-    try:
-        # electrode file is a json       
-        electrodes =  json.load(open(electrodes_file[0]))
-        ch_names = electrodes['names'] 
-        num_channels = len(ch_names)
-        dp['coords'] = electrodes['coords']
-        dp['probe_names'] = [''.join(filter(lambda x: not x.isdigit(), ch_name)) for ch_name in ch_names]
-        dp['contact_numbers'] = [''.join(filter(lambda x: x.isdigit(), ch_name)) for ch_name in ch_names]
-        dp['ch_names'] = [str(i+1).zfill(3) + '-' + dp['probe_names'][i] + dp['contact_numbers'][i] for i in range(num_channels)]
-        if 'gyri' in electrodes.keys(): dp['gyri'] =  electrodes['gyri']
-        # often last channel is ttl, we want it OUT
-        if 'MARKER' in ch_names:
-            del  dp['coords'][ch_names.index('MARKER')]
-            del  dp['ch_names'][ch_names.index('MARKER')]
-            
-    except:
-        print(f"electrodes not found")
-        dp['ch_names'] = []
-        dp['coords'] = []
-
-    if not (len(dp['ch_names'])==len(dp['coords'])) : sys.exit('Error: inconsistent number of electrodes / coordinates\n')
-
-    return dp
+    #print(SP['ChInfoFile'])
+    if os.path.isfile(SP['ChInfoFile']): SP['ChInfo'] = json.load(open(SP['ChInfoFile']))
+ 
+    return SP
 
 
 
@@ -160,8 +136,11 @@ def display_progress(text, counter, total, time_start):
 
     elapsed_time = int((time.time() - time_start)/60.)
     remaining_time = int(((time.time() - time_start)/(max(counter,1)))*(total-counter)/60.)
-    message = f"{text} ({counter+1}/{total}) e.t. {elapsed_time} min"
-    if counter > 0 : message += f", r.t. {remaining_time} min" 
+    #message = f"{text} ({counter+1}/{total}) e.t. {elapsed_time} min"
+    #if counter > 0 : message += f", r.t. {remaining_time} min" 
+    message = f"{text} ({counter+1}/{total})"
+    if counter > 0 : message += f", -{remaining_time} min" 
+
     print_d(message)     
 
 
@@ -184,16 +163,16 @@ def print_d(text):
 
 
 
-def concatenate_pdfs(figures_path,label,output_name,remove=False):
+def concatenate_pdfs(FiguresPath,label,OutputName,remove=False):
     '''Use pdfunite to concatenate pdf figures into a single file
 
     Parameters
     ----------
-    figures_path : str
+    FiguresPath : str
         path to the folder containing the figures to concatenate
     label : str
         string present in the names of the all pdf files to concatenate
-    output_name : str
+    OutputName : str
         name of the concatenated file
     remove : bool
         if True remove individual figures
@@ -202,9 +181,9 @@ def concatenate_pdfs(figures_path,label,output_name,remove=False):
     print_d("merging figures")
 
     # get current working directory to come back later
-    original_path = os.getcwd()    
+    OriginalPath = os.getcwd()    
     # move to the directory with the figures
-    os.chdir(figures_path)
+    os.chdir(FiguresPath)
 
     # get list of files
     files = sorted(glob.glob('*' + label + '*pdf'))
@@ -212,18 +191,14 @@ def concatenate_pdfs(figures_path,label,output_name,remove=False):
     # make and launch command
     command = "pdfunite "
     for f in files: command += f + ' '
-    command += output_name
+    command += OutputName
 
     os.system(command)
     # remove individual figures
     if remove: os.system("rm *" + label + "*.pdf")
 
     # go back to original path and carry on
-    os.chdir(original_path)
-
-
-
-
+    os.chdir(OriginalPath)
 
 
 
@@ -236,48 +211,66 @@ def concatenate_pdfs(figures_path,label,output_name,remove=False):
 
 
 
-def load_epochs(sub,band,ep_setup,picks=None, input_format=cfg.input_format):
+def load_epochs(sub, band, EpochsSetup, picks='good', InputFormat = cfg.InputFormat):
+    ''' Load raw (or epochs), smooth, clip, make epochs (if raw), apply baseline
+        power bands are transformed to dB
 
+    Parameters
+    ----------
+    sub : str
+    band : dict
+    EpochsSetup : dict
+    picks : str or list of str
+    InputFormat : str, 'raw' or 'epochs' 
 
-    dp = sub_params(sub)
+    Returns
+    -------
+    epochs : mne epochs
+
+    '''
+    SP = sub_params(sub)
 
     # --- RAW INPUT ----------------------------------------------------------
-    if input_format == 'raw':
-        raw_file = os.path.join(dp['derivatives_path'],f"{sub}_band-{band['name']}_raw.fif")
-        raw = mne.io.read_raw_fif(raw_file, preload=True)
-
-        picks = get_picks(raw,picks,sub=sub,band=band)
-        raw = raw.pick_channels(picks)
+    if InputFormat == 'raw':
+        raw_file = os.path.join(SP['DerivativesPath'], f"{sub}_band-{band['name']}_raw.fif")
+        raw = mne.io.read_raw_fif(raw_file, preload = True)
+        raw = raw.pick_channels(get_picks(SP, picks, band = band))
 
         # some operations do not apply to complex bands (used for phase)
-        if band['method']!='complex':
+        if band['method'] != 'complex':
             # clip and smooth
-            raw.apply_function(clip_n_rescale,picks='all',channel_wise=True,c=ep_setup['clip'])
-            raw.apply_function(gaussian_convolution,picks='all',channel_wise=True, sigma=ep_setup['smooth'])
+            raw.apply_function(clip_n_rescale, picks = 'all', channel_wise = True, c = EpochsSetup['clip'])
+            raw.apply_function(gaussian_convolution, picks = 'all', channel_wise = True, sigma=EpochsSetup['smooth'])
 
         # transform to dB
         if band['method'] in ['wavelet','hilbert']:
-            raw.apply_function(np.log,picks='all')
+            raw.apply_function(np.log10, picks = 'all')
+
+        # high pass filter baseline applied here
+        if EpochsSetup['baseline'] == 'hpf' and band['method']!='complex': 
+            raw.filter(cfg.hpf, None, phase = 'zero', picks='all')
 
         # make epochs
-        if dp['metadata_file'][-3:]=='csv': delimiter = ','
-        elif dp['metadata_file'][-3:]=='tsv': delimiter = '\t'
-        metadata = pd.read_csv(dp['metadata_file'], delimiter=delimiter)
-        epochs = make_epochs(raw,metadata,ep_setup)
+        if SP['MetadataFile'][-3:] == 'csv' : delimiter = ','
+        elif SP['MetadataFile'][-3:] == 'tsv' : delimiter = '\t'
+        metadata = pd.read_csv(SP['MetadataFile'], delimiter = delimiter)
+        epochs = make_epochs(raw, metadata, EpochsSetup)
 
         # trialwise baseline applied here
-        if isinstance(ep_setup['baseline'],dict) and band['method']!='complex': 
-            base_epochs = make_epochs(raw,metadata,ep_setup['baseline'])
-            epochs = trialwise_baseline(epochs,base_epochs,band['method'])
+        if isinstance(EpochsSetup['baseline'], dict) and band['method'] != 'complex' : 
+            # make epochs that will be used as baseline
+            BaseEpochs = make_epochs(raw, metadata, EpochsSetup['baseline'])
+            epochs = trialwise_baseline(epochs, BaseEpochs)
 
     # --- EPOCHS INPUT ----------------------------------------------------------
-    elif input_format == 'epochs':
+    elif InputFormat == 'epochs':
         # load epochs file here
-        epochs_file = os.path.join(dp['derivatives_path'],f"{sub}_band-{band['name']}_epochs-{ep_setup['name']}-epo.fif")
-        epochs = mne.read_epochs(epochs_file)
-        epochs.crop(ep_setup['tmin'],ep_setup['tmax'])                    
+        EpochsFile = os.path.join(SP['DerivativesPath'],f"{sub}_band-{band['name']}_epochs-{EpochsSetup['name']}-epo.fif")
+        epochs = mne.read_epochs(EpochsFile)
+        epochs.crop(EpochsSetup['tmin'], EpochsSetup['tmax'])                    
 
-    if 'query' in ep_setup.keys(): epochs = epochs[ep_setup['query']]
+    # filter epochs of interest
+    if 'sample' in EpochsSetup.keys(): epochs = epochs[EpochsSetup['sample']]
 
     return epochs
 
@@ -285,47 +278,61 @@ def load_epochs(sub,band,ep_setup,picks=None, input_format=cfg.input_format):
 
 
 
-def make_epochs(raw,metadata,ep_setup):
+def make_epochs(raw, metadata, EpochsSetup):
+    ''' make epochs from mne raw
+    
+    Parameters
+    ----------
+    raw : mne raw
+    metadata :  pd DataFrame
+    EpochsSetup : dict
+
+    Returns
+    -------
+    epochs : mne epochs
+
+    '''
 
     # filter metadata according to epoch_setup
-    epo_metadata = metadata[metadata[ep_setup['key']].isin(ep_setup['values'])]
+    EpochsMetadata = metadata[metadata[EpochsSetup['key']].isin(EpochsSetup['values'])]
 
     # make events array (MNE formatting [time sample, duration, label])
-    time = [int(cfg.srate*t) for t in epo_metadata['time']]
-    duration = [0]*len(epo_metadata['time'])
+    time = [int(cfg.srate*t) for t in EpochsMetadata['time']]
+    duration = [0]*len(EpochsMetadata['time'])
     label = np.ones_like(time).astype(int)
     events = np.array([time, duration, label]).T
     # make epochs
-    epochs = mne.Epochs(raw, events, tmin=ep_setup['tmin'], tmax=ep_setup['tmax'], picks='all', metadata = epo_metadata, preload=True, baseline=None,reject_by_annotation=False, verbose=False)
+    epochs = mne.Epochs(raw, events, tmin=EpochsSetup['tmin'], tmax=EpochsSetup['tmax'], picks='all', metadata = EpochsMetadata, preload=True, baseline=None,reject_by_annotation=False, verbose=False)
        
     return epochs
 
 
-def trialwise_baseline(epochs,base_epochs,method):
 
+
+def trialwise_baseline(epochs, BaseEpochs):
+    ''' apply trialwise baseline, 
+        for example baseline every event in a trial wrt fixation period of the given trial
+
+    '''
     # times of epochs and baseline epochs
-    t_base = base_epochs.metadata['time'].values
-    t_epochs = epochs.metadata['time'].values
+    tBase = BaseEpochs.metadata['time'].values
+    tEpochs = epochs.metadata['time'].values
 
     # for each epoch find closest previous event in baseline epochs
-    b_idx = [np.argmin(t-t_base[t_base<=t]) for t in t_epochs]
+    b_idx = [np.argmin(t-tBase[t_base<=t]) for t in tEpochs]
     
-
-    # array of baseline means                  new axis to be able to broadcast to epochs
-    m = base_epochs.get_data().mean(axis=-1)[b_idx,:,np.newaxis]
-
-    # find if data is filtered or amplitude and baseline
-    data = epochs.get_data()
-    if method in ['complex']: pass
-    else: data -= m
+    # array of baseline means                  
+    m = BaseEpochs.get_data().mean(axis=-1)[b_idx,:,np.newaxis]
+    #      new axis to be able to broadcast to epochs  ^
+    data = epochs.get_data() - m
 
     # make epochs with baselined data
-    epochs = mne.EpochsArray(data, epochs.info, events=epochs.events, metadata=epochs.metadata,tmin=epochs.tmin)
+    epochs = mne.EpochsArray(data, epochs.info, events = epochs.events, metadata = epochs.metadata, tmin = epochs.tmin)
 
     return epochs
 
 
-
+'''
 def load_df(file_tag,subs=cfg.subs,bands=cfg.bands):
     """ colect data from csv files across subjects 
 
@@ -352,70 +359,108 @@ def load_df(file_tag,subs=cfg.subs,bands=cfg.bands):
     # iterate over subjects ------------------------------------------------
     for sub in subs:
         # load subject params
-        dp = sub_params(sub)
+        SP = sub_params(sub)
         for band in bands:
             # load dataframe
             try:
-                filename = os.path.join(dp['derivatives_path'], f"{sub}_band-{band['name']}_{file_tag}.csv")
+                filename = os.path.join(SP['DerivativesPath'], f"{sub}_band-{band['name']}_{file_tag}.csv")
                 frames += [pd.read_csv(filename)]  #'coords': eval, 
             except:
-                filename = os.path.join(dp['derivatives_path'], f"{sub}_band-{band['name']}_{file_tag.replace('_','-')}.csv")
+                filename = os.path.join(SP['DerivativesPath'], f"{sub}_band-{band['name']}_{file_tag.replace('_','-')}.csv")
                 frames += [pd.read_csv(filename)]  #'coords': eval, 
     df = pd.concat(frames)
 
     df['coords'] =[c for c in df[['x','y','z']].values]
 
     return df
+'''
 
 
-def get_picks(raw,picks,sub=None,band=None):
+
+
+def get_picks(SP, picks = 'good', band = None):
     """ Shortcut to select groups of channels
 
     picks can be:
-    1 : list of channel names
-    2 : 'allROIs' (pick only ROIs)
-    3 : 'notROI' 
-    4 : 'EOI-xxxxx' read from EOIs file
-    5 : [ 'ROI-xxxx'] single ROI, return channels inside ROI
+    - list of channel names (then nothing is done)
+    - 'good' / 'bad' from rejection
+    - 'allROIs' (pick only ROIs)
+    - 'notROI' 
+    - 'EOI-xxxxx' read from EOIs file
+    - [ 'ROI-xxxx'] single ROI, return channels inside ROI
 
     Returns
     -------
     picks : list of channel names
     """
 
-    if isinstance(picks,list): pass     
-    elif picks == None or picks == 'all': picks= raw.ch_names       
-    elif picks == 'allROIs': picks = [ch for ch in raw.ch_names if ch[:3] =='ROI']
-    elif picks == 'notROI': picks = [ch for ch in raw.ch_names if ch[:3] !='ROI']
-    elif picks[:3]=='EOI': 
-        dp = sub_params(sub)
-        EOI_file = os.path.join(dp['derivatives_path'],f"{sub}_EOIs.json")
-        picks = json.load(open(EOI_file))[f"{picks}-{band['name']}"]
-    elif picks[:3]=='ROI':
-        p = [ch for ch in raw.ch_names if ch[:3]!='ROI']
-        coords = get_coords(raw, picks=p)
-        labels = get_ROI_labels(coords)
-        picks = [p[j] for j, l in enumerate(labels) if l==picks[0][4:] ]
+    ChNames = SP['ChInfo']['ChNames']
+
+    if isinstance(picks,list): PicksList = picks
+    elif picks == 'good' : PicksList = [ch for ch in ChNames if ch not in SP['ChInfo']['bad']]
+    elif picks == 'bad' : PicksList = SP['ChInfo']['bad']
+    elif picks == None or picks == 'all': PicksList = ChNames       
+    #elif picks == 'allROIs': PicksList = [ch for ch in ChNames if ch[:3] =='ROI']
+    #elif picks == 'notROI': PicksList = [ch for ch in ChNames if ch[:3] !='ROI']
+    elif 'EOI' in picks: PicksList = SP['ChInfo'][f"{picks}-{band['name']}"]
+    elif Picks[:3]=='not': 
+        notPicksList = SP['ChInfo'][f"{picks[3:]}-{band['name']}"]
+        PicksList = [ch for ch in raw.ch_names if ch not in notPicksList]
     else: sys.exit('Picks not recognized :(')
 
-    return picks
+    return PicksList
 
 
 
-
-
-def get_coords(raw,picks):
-    """ Extract array of ch coordinates from montage
+def get_coords(SP,picks='good'):
+    """ Extract array of ch coordinates either from subject parameters dict or 
+        from montage of mne.raw
         it also works for epochs objects instead of raw
+    
+    Parameters
+    ----------
+    X : either subject info dict or mne raw / epochs
+    PicksList : list of str (with channel names)
+
+    Returns
+    -------
+    coords : np.array (n_channels,3)
+
     """
-    positions_dict = raw.get_montage().get_positions()['ch_pos']
 
-    return np.array([positions_dict[ch_name] for ch_name in picks])
+    PicksList = get_picks(SP,picks)
+    coords = np.array([SP['ChInfo']['coords'][SP['ChInfo']['ChNames'].index(ChName)] for ChName in PicksList])
+
+    return coords
 
 
-def get_ROI_labels(coords,tol=cfg.ROI_tolerance):
+'''
+def get_coords_from_raw(raw):
+    """ Extract array of ch coordinates from montage of mne.raw
+        it also works for epochs objects instead of raw
+    
+    Parameters
+    ----------
+    raw : mne raw / epochs
+
+    Returns
+    -------
+    coords : np.array (n_channels,3)
+    """
+
+    PositionsDict = X.get_montage().get_positions()['ch_pos']
+    coords = np.array([PositionsDict[ChName] for ChName in PicksList])
+
+    return coords
+'''
+
+
+
+
+
+def get_ROI_labels(coords,tol=cfg.ROITolerance):
     """Argument:
-    - coords: (N, x, y, z)
+    - coords: (N, [x, y, z])
 
     Returns:
     - ROIs (N)
@@ -453,8 +498,6 @@ def get_ROI_labels(coords,tol=cfg.ROI_tolerance):
 
     ROIs = [cfg.replacements.get(x, x) for x in ROIs]
 
-
-
     return ROIs
 
 
@@ -480,7 +523,6 @@ def clip_n_rescale(x, c = cfg.clip, zscore = cfg.zscore):
     '''
     if c > 0:
         thresholds =np.squeeze(RobustScaler().fit(x.reshape(-1, 1)).inverse_transform([[-c],[c]]))
-        #x = np.squeeze(RobustScaler().fit_transform(x.reshape(-1, 1)))
         x = np.clip(x,thresholds[0],thresholds[1])
 
     if zscore:
@@ -510,87 +552,15 @@ def gaussian_convolution(x,sigma=cfg.smooth):
     if sigma>0: 
         # transforme std from seconds to samples
         sigma *= cfg.srate
-        
         # gausian pdf
-        #gx = np.arange(-3*sigma, 3*sigma)
-        #g = np.exp(-(gx/sigma)**2/2)
-
-        # uniform window
-        g = np.ones(int(sigma))
-
+        gx = np.arange(-3*sigma, 3*sigma)
+        g = np.exp(-(gx/sigma)**2/2)
         # normalize
         g /= np.sum(g)
 
-
-
-        #print(x.shape)
         x = np.convolve(x,g,mode="same")
-        #print(x.shape)
 
     return x
-
-
-def fdr_correction(df,key,condition=None):
-    """ add a column with fdr corrected pvalues to a data frame 
-
-    Parameters
-    ----------
-    df : pandas dataframe
-    key : str
-        name of the column on which to perform frd correction
-    condition : str or None
-        alows to prefilter p values for negative regression scores
-        condition = 'r2' filters out p values with r2 < 0
-
-    Returns
-    -------
-    df : pandas dataframe
-        with  one column named key_fdr added
-    """
-
-
-    if isinstance(condition,str):
-        corrected = np.ones(len(df))
-        #print(df[df[condition]>0][key])
-        #print(mne.stats.fdr_correction(df[df[condition]>0][key],cfg.alpha)[1])
-        corrected[df[condition]>0] = mne.stats.fdr_correction(df[df[condition]>0][key],cfg.alpha)[1]
-        df[key + '_fdr'] = corrected
-    else:
-        #df[key + '_fdr'] = mne.stats.fdr_correction(df[key],cfg.alpha)[1]
-
-        p_fdr = np.ones(len(df))
-
-        p_fdr[df[key]<0.9] = mne.stats.fdr_correction(df[df[key]<0.9][key],cfg.alpha)[1]
-
-        df['p_fdr'] = p_fdr
-
-    return df
-
-
-
-def filter_df(df,file_tag,key,alpha=cfg.alpha, subs=cfg.subs,bands=cfg.bands):
-    """ Filter one df with respect to values of column 'key' of another df
-
-    Parameters
-    ----------
-    df : pandas dataframe
-        one of the columns has to 
-    file_tag : str
-        tag to identify the file with the condition to filter
-    key : str
-        name of the column on which to perform frd correction
-
-    Returns
-    -------
-    df : pandas dataframe
-        filtered df
-    """
-
-    df_filter = load_df(file_tag)
-    df = df.filter(df_filter[key]<alpha,axis=index)
-
-
-    return df
 
 
 
@@ -609,6 +579,45 @@ def filter_df(df,file_tag,key,alpha=cfg.alpha, subs=cfg.subs,bands=cfg.bands):
      /\   \  /   /
        \   \/   /
         \___\__/
+
+
+
+
+def fdr_correction(df,key,condition=None):
+    ''' add a column with fdr corrected pvalues to a data frame 
+
+    Parameters
+    ----------
+    df : pandas dataframe
+    key : str
+        name of the column on which to perform frd correction
+    condition : str or None
+        alows to prefilter p values for negative regression scores
+        condition = 'r2' filters out p values with r2 < 0
+
+    Returns
+    -------
+    df : pandas dataframe
+        with  one column named key_fdr added
+    '''
+
+
+    if isinstance(condition,str):
+        corrected = np.ones(len(df))
+        #print(df[df[condition]>0][key])
+        #print(mne.stats.fdr_correction(df[df[condition]>0][key],cfg.alpha)[1])
+        corrected[df[condition]>0] = mne.stats.fdr_correction(df[df[condition]>0][key],cfg.alpha)[1]
+        df[key + '_fdr'] = corrected
+    else:
+        #df[key + '_fdr'] = mne.stats.fdr_correction(df[key],cfg.alpha)[1]
+
+        p_fdr = np.ones(len(df))
+
+        p_fdr[df[key]<0.9] = mne.stats.fdr_correction(df[df[key]<0.9][key],cfg.alpha)[1]
+
+        df['p_fdr'] = p_fdr
+
+    return df
 
 
 
